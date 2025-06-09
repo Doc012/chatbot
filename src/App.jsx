@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FaPaperPlane, FaRobot, FaClock, FaParking, FaUtensils, FaShoppingBag, FaPercent, FaMapMarkerAlt, FaTrash, FaMoon, FaSun, FaMicrophone, FaMapMarked } from 'react-icons/fa';
+import { FaPaperPlane, FaRobot, FaClock, FaParking, FaUtensils, FaShoppingBag, FaPercent, FaMapMarkerAlt, FaTrash, FaMoon, FaSun, FaMicrophone } from 'react-icons/fa';
 import Message from './components/Message';
-import MallMap from './components/MallMap';
 
 // Typing indicator component
 const TypingIndicator = () => (
@@ -45,7 +44,6 @@ export default function App() {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showQuickResponses, setShowQuickResponses] = useState(true);
-  const [showMap, setShowMap] = useState(false);
   const messagesEndRef = useRef(null);
   const [isMallOpen, setIsMallOpen] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
@@ -183,7 +181,7 @@ export default function App() {
         "Are there any events today?"
       ];
     } else if (input.includes('parking') || input.includes('park')) {
-      response.text = "We have parking available on levels P1-P3. The first 2 hours are free with any purchase. Valet parking is also available at the main entrance for $15.";
+      response.text = "We have parking available on levels P1-P3. The first 2 hours are free with any purchase. Valet parking is also available at the main entrance for R250.";
       response.suggestedQuestions = [
         "How do I get to the food court?",
         "Is there EV charging available?",
@@ -387,7 +385,7 @@ export default function App() {
         ];
       }
     } else if (input.includes('sale') || input.includes('discount') || input.includes('offer') || input.includes('deal')) {
-      response.text = "Currently we have summer sales in most fashion stores with discounts up to 50%. The electronics stores are also offering back-to-school specials. Check our app for daily deals!";
+      response.text = "Currently we have summer sales in most fashion stores with discounts up to 50%. The electronics stores are also offering back-to-school specials starting from R250. Check our app for daily deals!";
       response.suggestedQuestions = [
         "Are there any clearance items?",
         "How often do sales occur?",
@@ -839,31 +837,12 @@ export default function App() {
                   text="Location" 
                   onClick={() => handleQuickResponse("Where is the mall located?")}
                 />
-                <QuickResponseButton 
-                  icon={<FaMapMarked className="text-blue-500" />} 
-                  text="Mall Map" 
-                  onClick={() => setShowMap(true)}
-                />
               </div>
             </div>
           )}
           
           <div ref={messagesEndRef} />
         </div>
-        
-        {/* Map component */}
-        {showMap && (
-          <div className="relative">
-            <MallMap onClose={() => setShowMap(false)} />
-            <button
-              className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md"
-              onClick={() => setShowMap(false)}
-              aria-label="Close map"
-            >
-              <FaTimes />
-            </button>
-          </div>
-        )}
         
         {/* Input */}
         <form 
