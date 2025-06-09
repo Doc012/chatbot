@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FaPaperPlane, FaRobot, FaClock, FaParking, FaUtensils, FaShoppingBag, FaPercent, FaMapMarkerAlt, FaTrash } from 'react-icons/fa';
+import { FaPaperPlane, FaRobot, FaClock, FaParking, FaUtensils, FaShoppingBag, FaPercent, FaMapMarkerAlt, FaTrash, FaMoon, FaSun, FaMicrophone, FaMapMarked } from 'react-icons/fa';
 import Message from './components/Message';
+import MallMap from './components/MallMap';
 
 // Typing indicator component
 const TypingIndicator = () => (
   <div className="flex justify-start">
-    <div className="bg-white text-gray-800 p-3 rounded-2xl rounded-bl-none max-w-[80%] shadow-sm">
-      <div className="flex space-x-2">
+    <div className="bg-white text-gray-800 p-4 rounded-2xl rounded-bl-none max-w-[80%] shadow-sm">
+      <div className="flex space-x-3">
         <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
         <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
         <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
@@ -19,10 +20,10 @@ const TypingIndicator = () => (
 const QuickResponseButton = ({ icon, text, onClick }) => (
   <button 
     onClick={onClick}
-    className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 rounded-full text-sm font-medium transition-all transform hover:scale-105 active:scale-95 shadow-sm border border-gray-200"
+    className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-white hover:bg-gray-50 rounded-full text-xs sm:text-sm font-medium transition-all transform hover:scale-105 active:scale-95 shadow-sm border border-gray-200"
   >
-    {icon}
-    <span>{text}</span>
+    <span className="text-blue-500">{icon}</span>
+    <span className="text-gray-700">{text}</span>
   </button>
 );
 
@@ -44,8 +45,16 @@ export default function App() {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showQuickResponses, setShowQuickResponses] = useState(true);
+  const [showMap, setShowMap] = useState(false);
   const messagesEndRef = useRef(null);
   const [isMallOpen, setIsMallOpen] = useState(null);
+  const [darkMode, setDarkMode] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  // Add a font size state
+  const [fontSize, setFontSize] = useState('normal'); // 'small', 'normal', 'large'
+  const [refreshProgress, setRefreshProgress] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Check if mall is currently open
   useEffect(() => {
@@ -88,6 +97,21 @@ export default function App() {
     if (savedMessages) {
       setMessages(JSON.parse(savedMessages));
     }
+  }, []);
+
+  // Check system preference on mount
+  useEffect(() => {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setDarkMode(true);
+    }
+  }, []);
+
+  // Simulate initial loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+    return () => clearTimeout(timer);
   }, []);
 
   const processUserInput = (input) => {
@@ -528,19 +552,168 @@ export default function App() {
     return response;
   };
 
+  const startVoiceInput = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Voice input is not supported in your browser');
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setInputValue(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error', event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
+
+  // Add this effect to handle swipe to scroll
+  useEffect(() => {
+    // Only run on mobile devices
+    if (window.innerWidth < 640) {
+      const messagesContainer = document.querySelector('.messages-container');
+      
+      let touchStart = null;
+      
+      const handleTouchStart = (e) => {
+        touchStart = e.touches[0].clientY;
+      };
+      
+      const handleTouchMove = (e) => {
+        if (touchStart === null) return;
+        
+        const touchEnd = e.touches[0].clientY;
+        const diff = touchStart - touchEnd;
+        
+        // Add smooth scrolling based on touch movement
+        messagesContainer.scrollTop += diff * 0.6;
+        touchStart = touchEnd;
+      };
+      
+      const handleTouchEnd = () => {
+        touchStart = null;
+      };
+      
+      if (messagesContainer) {
+        messagesContainer.addEventListener('touchstart', handleTouchStart);
+        messagesContainer.addEventListener('touchmove', handleTouchMove);
+        messagesContainer.addEventListener('touchend', handleTouchEnd);
+        
+        return () => {
+          messagesContainer.removeEventListener('touchstart', handleTouchStart);
+          messagesContainer.removeEventListener('touchmove', handleTouchMove);
+          messagesContainer.removeEventListener('touchend', handleTouchEnd);
+        };
+      }
+    }
+  }, []);
+
+  // Add pull to refresh functionality
+  useEffect(() => {
+    // Only run on mobile devices
+    if (window.innerWidth < 640) {
+      const messagesContainer = document.querySelector('.messages-container');
+      let startY = 0;
+      
+      const handleTouchStart = (e) => {
+        if (messagesContainer.scrollTop === 0) {
+          startY = e.touches[0].clientY;
+        }
+      };
+      
+      const handleTouchMove = (e) => {
+        if (messagesContainer.scrollTop === 0 && startY > 0) {
+          const pull = e.touches[0].clientY - startY;
+          if (pull > 0) {
+            setRefreshProgress(Math.min(pull / 100, 1));
+            if (pull > 70) {
+              setIsRefreshing(true);
+            }
+          }
+        }
+      };
+      
+      const handleTouchEnd = () => {
+        if (isRefreshing) {
+          // Reset chat
+          setMessages([{ 
+            text: "Welcome to the Shopping Mall Assistant! I can help you with information about our stores, restaurants, services, facilities, and events. What would you like to know about the mall today?", 
+            sender: "bot",
+            timestamp: new Date().toISOString(),
+            suggestedQuestions: [
+              "What are the mall hours?",
+              "Where can I park?",
+              "What stores do you have?",
+              "Where can I eat?",
+              "Are there any sales today?"
+            ]
+          }]);
+          setShowQuickResponses(true);
+          localStorage.removeItem('chatHistory');
+        }
+        
+        setRefreshProgress(0);
+        setIsRefreshing(false);
+        startY = 0;
+      };
+      
+      if (messagesContainer) {
+        messagesContainer.addEventListener('touchstart', handleTouchStart);
+        messagesContainer.addEventListener('touchmove', handleTouchMove);
+        messagesContainer.addEventListener('touchend', handleTouchEnd);
+        
+        return () => {
+          messagesContainer.removeEventListener('touchstart', handleTouchStart);
+          messagesContainer.removeEventListener('touchmove', handleTouchMove);
+          messagesContainer.removeEventListener('touchend', handleTouchEnd);
+        };
+      }
+    }
+  }, [isRefreshing]);
+
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4">
-      <div className="w-full max-w-md h-[600px] bg-white rounded-xl shadow-xl flex flex-col overflow-hidden border border-gray-200">
+    <div className={`flex justify-center items-center min-h-screen ${
+      darkMode 
+        ? 'bg-gray-900' 
+        : 'bg-gradient-to-br from-blue-50 to-purple-50'
+    } p-2 sm:p-4 transition-colors duration-300`}>
+      <div className={`w-full max-w-md sm:max-w-lg md:max-w-xl h-[85vh] sm:h-[600px] md:h-[700px] ${
+        darkMode 
+          ? 'bg-gray-800 border-gray-700' 
+          : 'bg-white border-gray-200'
+      } rounded-xl shadow-xl flex flex-col overflow-hidden border transition-colors duration-300`}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 flex flex-col">
+        <div className={`${
+          darkMode 
+            ? 'bg-gradient-to-r from-blue-800 to-blue-900' 
+            : 'bg-gradient-to-r from-blue-600 to-blue-700'
+        } text-white p-3 sm:p-4 flex flex-col transition-colors duration-300`}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-white p-2 rounded-full">
-                <FaRobot className="text-blue-600 text-xl" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="bg-white p-1 sm:p-2 rounded-full">
+                <FaRobot className="text-blue-600 text-lg sm:text-xl" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold">Mall Assistant</h1>
-                <p className="text-xs text-blue-100">
+                <h1 className="text-lg sm:text-xl font-semibold">Mall Assistant</h1>
+                <p className="text-[10px] sm:text-xs text-blue-100">
                   {isMallOpen !== null ? (
                     <span className="flex items-center gap-1">
                       <span className={`inline-block w-2 h-2 rounded-full ${isMallOpen ? 'bg-green-400' : 'bg-red-400'}`}></span>
@@ -550,41 +723,84 @@ export default function App() {
                 </p>
               </div>
             </div>
-            <button 
-              onClick={() => {
-                setMessages([{ 
-                  text: "Welcome to the Shopping Mall Assistant! I can help you with information about our stores, restaurants, services, facilities, and events. What would you like to know about the mall today?", 
-                  sender: "bot",
-                  timestamp: new Date().toISOString(),
-                  suggestedQuestions: [
-                    "What are the mall hours?",
-                    "Where can I park?",
-                    "What stores do you have?",
-                    "Where can I eat?",
-                    "Are there any sales today?"
-                  ]
-                }]);
-                setShowQuickResponses(true);
-                localStorage.removeItem('chatHistory');
-              }}
-              className="text-xs bg-blue-700 hover:bg-blue-800 px-2 py-1 rounded flex items-center gap-1"
-            >
-              <FaTrash size={12} /> <span>Reset</span>
-            </button>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                onClick={() => setDarkMode(prev => !prev)}
+                className="p-1 sm:p-2 rounded-full bg-opacity-20 bg-black hover:bg-opacity-30 transition-all"
+              >
+                {darkMode ? <FaSun size={12} className="sm:text-[14px]" /> : <FaMoon size={12} className="sm:text-[14px]" />}
+              </button>
+              <button
+                onClick={() => {
+                  setFontSize(current => 
+                    current === 'small' ? 'normal' : 
+                    current === 'normal' ? 'large' : 'small'
+                  );
+                }}
+                className="p-1 sm:p-2 rounded-full bg-opacity-20 bg-black hover:bg-opacity-30 transition-all"
+                aria-label="Change text size"
+                title="Change text size"
+              >
+                <span className="text-[10px] sm:text-xs">Aa</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setMessages([{ 
+                    text: "Welcome to the Shopping Mall Assistant! I can help you with information about our stores, restaurants, services, facilities, and events. What would you like to know about the mall today?", 
+                    sender: "bot",
+                    timestamp: new Date().toISOString(),
+                    suggestedQuestions: [
+                      "What are the mall hours?",
+                      "Where can I park?",
+                      "What stores do you have?",
+                      "Where can I eat?",
+                      "Are there any sales today?"
+                    ]
+                  }]);
+                  setShowQuickResponses(true);
+                  localStorage.removeItem('chatHistory');
+                }}
+                className="text-[10px] sm:text-xs bg-blue-700 hover:bg-blue-800 px-1 sm:px-2 py-1 rounded flex items-center gap-1"
+              >
+                <FaTrash size={10} className="sm:text-[12px]" /> <span>Reset</span>
+              </button>
+            </div>
           </div>
           <p className="text-xs text-blue-100 mt-1 italic">Ask me about mall stores, restaurants, facilities & services</p>
         </div>
         
         {/* Messages */}
-        <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3 bg-gray-50">
-          {messages.map((message, index) => (
-            <Message 
-              key={index} 
-              message={message} 
-              isLastMessage={index === messages.length - 1 && message.sender === 'user'}
-              onSuggestedQuestionClick={handleSuggestedQuestionClick}
-            />
-          ))}
+        <div className={`flex-1 p-2 sm:p-4 overflow-y-auto flex flex-col gap-2 sm:gap-3 messages-container ${
+          darkMode ? 'bg-gray-900' : 'bg-gray-50'
+        }`}>
+          <div className="text-center text-xs text-gray-400 mb-2 refresh-indicator" style={{opacity: refreshProgress}}>
+            Pull down to refresh conversation
+          </div>
+          
+          {isLoading ? (
+            <div className={`flex-1 p-4 overflow-y-auto flex flex-col gap-3 ${
+              darkMode ? 'bg-gray-900' : 'bg-gray-50'
+            }`}>
+              <MessageSkeleton darkMode={darkMode} />
+              <MessageSkeleton darkMode={darkMode} />
+            </div>
+          ) : (
+            messages.map((message, index) => (
+              <div 
+                key={index} 
+                className="animate-fadeIn" 
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <Message 
+                  message={message} 
+                  isLastMessage={index === messages.length - 1 && message.sender === 'user'}
+                  onSuggestedQuestionClick={handleSuggestedQuestionClick}
+                  darkMode={darkMode}
+                  fontSize={fontSize}
+                />
+              </div>
+            ))
+          )}
           
           {isTyping && <TypingIndicator />}
           
@@ -623,6 +839,11 @@ export default function App() {
                   text="Location" 
                   onClick={() => handleQuickResponse("Where is the mall located?")}
                 />
+                <QuickResponseButton 
+                  icon={<FaMapMarked className="text-blue-500" />} 
+                  text="Mall Map" 
+                  onClick={() => setShowMap(true)}
+                />
               </div>
             </div>
           )}
@@ -630,9 +851,23 @@ export default function App() {
           <div ref={messagesEndRef} />
         </div>
         
+        {/* Map component */}
+        {showMap && (
+          <div className="relative">
+            <MallMap onClose={() => setShowMap(false)} />
+            <button
+              className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md"
+              onClick={() => setShowMap(false)}
+              aria-label="Close map"
+            >
+              <FaTimes />
+            </button>
+          </div>
+        )}
+        
         {/* Input */}
         <form 
-          className="p-3 border-t border-gray-200 flex items-center gap-2 bg-white" 
+          className={`p-2 sm:p-3 border-t ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'} flex items-center gap-2`}
           onSubmit={handleSendMessage}
         >
           <input
@@ -640,8 +875,25 @@ export default function App() {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Type your question here..."
-            className="flex-1 py-2 px-4 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className={`flex-1 py-2 px-3 sm:px-4 border ${
+              darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
+            } rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm`}
           />
+          
+          {/* Make voice input button more prominent on mobile */}
+          <button
+            type="button"
+            onClick={startVoiceInput}
+            className={`p-2 rounded-full text-white ${
+              isListening 
+                ? 'bg-red-500 animate-pulse' 
+                : darkMode ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'
+            } transition-all focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            aria-label="Voice input"
+          >
+            <FaMicrophone size={16} className={isListening ? 'text-white' : darkMode ? 'text-gray-300' : 'text-gray-600'} />
+          </button>
+          
           <button 
             type="submit"
             className={`text-white p-3 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md transform hover:scale-105 active:scale-95 ${
@@ -650,6 +902,7 @@ export default function App() {
                 : 'bg-gray-400 cursor-not-allowed'
             }`}
             disabled={!inputValue.trim()}
+            aria-label="Send message"
           >
             <FaPaperPlane />
           </button>
@@ -658,3 +911,26 @@ export default function App() {
     </div>
   );
 }
+
+// Message skeleton component
+const MessageSkeleton = ({ darkMode }) => (
+  <div className={`flex justify-start animate-pulse`}>
+    <div className={`max-w-[90%] sm:max-w-[80%] p-2 sm:p-3 rounded-2xl shadow-sm ${
+      darkMode ? 'bg-gray-700' : 'bg-white'
+    }`}>
+      <div className="flex items-start gap-2 sm:gap-3">
+        <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-full ${
+          darkMode ? 'bg-gray-600' : 'bg-gray-200'
+        }`}></div>
+        <div className="flex-1">
+          <div className={`h-2 ${
+            darkMode ? 'bg-gray-600' : 'bg-gray-200'
+          } rounded w-3/4 mb-2`}></div>
+          <div className={`h-2 ${
+            darkMode ? 'bg-gray-600' : 'bg-gray-200'
+          } rounded w-1/2`}></div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
